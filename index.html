@@ -23,7 +23,8 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--fg); }
+/* "contain" stops Chrome's pull-to-refresh. The data reloads each time the app comes to the front. */
+html, body { margin: 0; background: var(--bg); color: var(--fg); overscroll-behavior-y: contain; }
 body {
   font: 15px/1.3 system-ui, Roboto, sans-serif;
   font-variant-numeric: tabular-nums;
