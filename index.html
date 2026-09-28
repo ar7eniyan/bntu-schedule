@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Расписание</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<style>
+:root {
+  --bg: #fff; --fg: #111; --muted: #6b6b6b; --faint: #bdbdbd; --line: #e6e6e6;
+  --day-bg: #f1f1f1; --today-bg: #dde8ff; --accent: #1a5fe0;
+  --lek: #6b6b6b; --pr: #1a5fe0; --lab: #b85600; --kp: #8a3fd1; --err: #c00;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212; --fg: #e9e9e9; --muted: #9c9c9c; --faint: #4f4f4f; --line: #262626;
+    --day-bg: #1d1d1d; --today-bg: #1b2b48; --accent: #7aa7ff;
+    --lek: #9c9c9c; --pr: #7aa7ff; --lab: #ffa04a; --kp: #c793ff; --err: #ff6b6b;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body {
+  font: 15px/1.3 system-ui, Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y pinch-zoom;
+}
+header {
+  position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: stretch;
+  padding: calc(env(safe-area-inset-top) + 4px) 4px 4px; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+button, #pick {
+  font: inherit; color: var(--muted); background: none; border: 1px solid var(--line);
+  border-radius: 4px; padding: 3px 10px; display: flex; align-items: center;
+}
+button.on, #pick.on { color: var(--fg); border-color: var(--fg); font-weight: 600; }
+#wk { display: flex; align-items: center; padding-left: 2px; font-weight: 600; }
+#prev, #next { padding: 3px 7px; }
+#pick { position: relative; }
+#pick input { position: absolute; inset: 0; width: 100%; opacity: 0; }
+#nav { display: flex; gap: 4px; }
+/* Both labels share one grid cell, so the button keeps its width when the label changes. */
+#mode { display: grid; padding: 3px 8px; }
+#mode span { grid-area: 1 / 1; align-self: center; text-align: center; }
+#mode.short span.to-short, #mode.full span.to-full { visibility: hidden; }
+svg { display: block; fill: currentColor; }
+#err { color: var(--err); padding: 4px; white-space: pre-wrap; }
+#err:empty { display: none; }
+table { width: 100%; border-collapse: collapse; }
+td { padding: 3px 4px; white-space: nowrap; vertical-align: baseline; }
+tr.day td { background: var(--day-bg); font-size: 13px; font-weight: 600; color: var(--muted); }
+tr.day.today td { background: var(--today-bg); color: var(--accent); }
+tr.c td, tr.gap td { border-top: 1px solid var(--line); }
+tr.day + tr td { border-top: 0; }
+td.t, td.k, td.rn, td.rs, td.rb { width: 1%; }
+td.k { font-size: 13px; }
+td.rn { text-align: right; padding-right: 0; }
+td.rs { padding: 0 .2em; color: var(--muted); text-align: center; }
+td.k.none { text-align: center; }
+.none { color: var(--faint); }
+/* The dash of an empty room is centered on the slash column, so it lines up with the slashes.
+   The zero-width box keeps the column as narrow as a slash. */
+td.rs .none { display: inline-flex; justify-content: center; width: 0; }
+td.rb { padding-left: 0; }
+.short td.s { width: 100%; }
+td.w { padding-left: 12px; }
+.short td.w { color: var(--muted); max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; }
+.full td.w { width: 100%; }
+.full tr.c td.s { white-space: normal; }
+tr.c2 td { font-size: 13px; padding-top: 0; }
+tr.c2 td:not(.k) { color: var(--muted); }
+.лек { color: var(--lek); } .пр { color: var(--pr); } .лаб { color: var(--lab); } .КП { color: var(--kp); }
+tr.gap td { color: var(--faint); }
+tr.now td.t { box-shadow: inset 3px 0 var(--accent); }
+tr.c.now td.t { font-weight: 700; }
+tr.c.next td.t { color: var(--accent); }
+tr.det td { color: var(--muted); font-size: 13px; white-space: normal; padding-top: 0; }
+tr.det[hidden] { display: none; }
+td.split .sep { display: none; }
+td.split .tn { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <span id="wk"></span>
+  <span id="nav">
+  <button id="prev" type="button" aria-label="предыдущая неделя">
+    <svg width="10" height="14" viewBox="0 0 10 14"><path d="M8 1 2 7l6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+  </button>
+  <label id="pick"><span id="range"></span><input id="date" type="date" aria-label="выбрать неделю"></label>
+  <button id="next" type="button" aria-label="следующая неделя">
+    <svg width="10" height="14" viewBox="0 0 10 14"><path d="M2 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+  </button>
+  </span>
+  <button id="mode" type="button"><span class="to-full">подробно</span><span class="to-short">кратко</span></button>
+</header>
+<div id="err"></div>
+<table id="tbl"></table>
+<script>
+'use strict';
+const DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const DAY_MS = 864e5;
+
+// Split a line into fields. A quoted field can hold spaces. "#" starts a comment.
+function tokenize(line) {
+  const out = [];
+  let i = 0;
+  while (i < line.length) {
+    if (/\s/.test(line[i])) { i++; continue; }
+    if (line[i] === '#') break;
+    if (line[i] === '"') {
+      const j = line.indexOf('"', i + 1);
+      if (j < 0) throw new Error('нет закрывающей кавычки');
+      out.push(line.slice(i + 1, j));
+      i = j + 1;
+    } else {
+      let j = i;
+      while (j < line.length && !/\s/.test(line[j])) j++;
+      out.push(line.slice(i, j));
+      i = j;
+    }
+  }
+  return out;
+}
+
+function parse(text) {
+  const s = { week1: null, slots: [], names: {}, classes: [], errors: [] };
+  text.split(/\r?\n/).forEach((line, n) => {
+    try {
+      const f = tokenize(line);
+      if (!f.length) return;
+      const [key] = f;
+      if (key === 'week1') {
+        const d = parseDate(f[1]);
+        if (!d) throw new Error('дата должна быть ГГГГ-ММ-ДД');
+        s.week1 = mondayOf(d);
+      } else if (key === 'slot') {
+        if (!isTime(f[1]) || !isTime(f[2])) throw new Error('slot начало конец, например slot 12:00 13:35');
+        s.slots.push({ start: f[1], end: f[2] });
+      } else if (key === 'name') {
+        if (f.length !== 3) throw new Error('name короткое "полное имя"');
+        s.names[f[1]] = f[2];
+      } else if (DAYS.includes(key)) {
+        if (f.length < 6 || f.length > 7) throw new Error('нужно 6 или 7 полей: день начало неделя тип предмет аудитория ["преподаватель"]');
+        const [day, start, week, type, subj, room, teacher = ''] = f;
+        if (!isTime(start)) throw new Error('время должно быть ЧЧ:ММ');
+        if (!['1', '2', '-'].includes(week)) throw new Error('неделя: 1, 2 или -');
+        const [num, bld = ''] = room === '-' ? [''] : room.split('/');
+        s.classes.push({ day: DAYS.indexOf(day), start, week, type: type === '-' ? '' : type, subj, num, bld, teacher });
+      } else {
+        throw new Error('неизвестное начало строки: ' + key);
+      }
+    } catch (e) {
+      s.errors.push(`строка ${n + 1}: ${e.message}\n  ${line.trim()}`);
+    }
+  });
+  if (!s.week1) s.errors.push('нет строки week1 ГГГГ-ММ-ДД');
+  for (const c of s.classes) {
+    c.slot = s.slots.find(x => x.start === c.start);
+    if (!c.slot) s.errors.push(`нет пары с началом ${c.start} (${DAYS[c.day]} ${c.subj})`);
+  }
+  return s;
+}
+
+function parseDate(v) {
+  const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v || '');
+  return m ? new Date(+m[1], m[2] - 1, +m[3]) : null;
+}
+function isoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function isTime(t) { return /^\d?\d:\d\d$/.test(t || ''); }
+function minutes(t) { const [h, m] = t.split(':'); return h * 60 + +m; }
+function mondayOf(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - (x.getDay() + 6) % 7);
+  return x;
+}
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function weekNo(monday) {
+  const diff = Math.round((monday - sched.week1) / (7 * DAY_MS));
+  return ((diff % 2) + 2) % 2 === 0 ? 1 : 2;
+}
+function surname(teacher) { return teacher.split(' ').find(w => w && !w.includes('.')) || teacher; }
+function esc(v) {
+  return String(v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+function ddmm(d) { return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0'); }
+
+let sched = null;
+let picked = null;         // Monday of the week to show. null means the relevant week.
+let openKey = null;        // The row with the detail line shown, in the short layout.
+let mode = 'short';
+try { mode = localStorage.getItem('mode') || 'short'; } catch (e) {}
+
+// On Saturday and Sunday the next week is the relevant one.
+function relevantMonday() {
+  const now = new Date();
+  const m = mondayOf(now);
+  return (now.getDay() + 6) % 7 >= 5 ? addDays(m, 7) : m;
+}
+function shownMonday() { return picked || relevantMonday(); }
+function show(monday) {
+  picked = +monday === +relevantMonday() ? null : monday;
+  render();
+}
+
+function render() {
+  if (!sched || !sched.week1) return;
+  const now = new Date();
+  const relMonday = relevantMonday();
+  const monday = shownMonday();
+  const week = weekNo(monday);
+  const todayIdx = +mondayOf(now) === +monday ? (now.getDay() + 6) % 7 : -1;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const lastDay = sched.classes.some(c => c.day === 5) ? 5 : 4;
+
+  document.getElementById('wk').textContent = 'неделя ' + week;
+  document.getElementById('range').textContent = `${ddmm(monday)} – ${ddmm(addDays(monday, 6))}`;
+  document.getElementById('pick').classList.toggle('on', +monday !== +relMonday);
+  document.getElementById('date').value = isoDate(monday);
+  document.getElementById('mode').className = mode;
+
+  const cols = mode === 'short' ? 7 : 6;
+  const html = [];
+  for (let d = 0; d <= lastDay; d++) {
+    const list = sched.classes
+      .filter(c => c.day === d && c.slot && (c.week === '-' || +c.week === week))
+      .sort((a, b) => minutes(a.start) - minutes(b.start));
+    html.push(`<tr class="day${d === todayIdx ? ' today' : ''}"><td colspan="${cols}">${DAYS[d].toUpperCase()} ${ddmm(addDays(monday, d))}</td></tr>`);
+    if (!list.length) continue;
+
+    let mark = null, state = '';
+    if (d === todayIdx) {
+      mark = list.find(c => minutes(c.start) <= nowMin && nowMin < minutes(c.slot.end));
+      if (mark) state = 'now';
+      else { mark = list.find(c => minutes(c.start) > nowMin); if (mark) state = 'next'; }
+    }
+    // Free slots between the first and the last class of the day.
+    const first = sched.slots.indexOf(list[0].slot);
+    const last = sched.slots.indexOf(list[list.length - 1].slot);
+    for (let i = first; i <= last; i++) {
+      const slot = sched.slots[i];
+      const here = list.filter(c => c.slot === slot);
+      if (!here.length) {
+        html.push(`<tr class="gap"><td class="t">${slot.start}</td><td colspan="${cols - 1}"></td></tr>`);
+        continue;
+      }
+      for (const c of here) html.push(row(c, c === mark ? state : ''));
+    }
+  }
+  const tbl = document.getElementById('tbl');
+  tbl.className = mode;
+  tbl.innerHTML = html.join('');
+  tbl.querySelectorAll('tr.det:not([hidden]) td.d').forEach(fit);
+}
+
+// Put the teacher on a separate line if "name · teacher" does not fit on one line.
+const ruler = document.createElement('canvas').getContext('2d');
+function fit(td) {
+  const tn = td.querySelector('.tn');
+  if (!tn || !td.querySelector('.fn')) return;
+  const cs = getComputedStyle(td);
+  // cs.font is empty here: "font-variant-numeric" cannot go into the shorthand.
+  ruler.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const room = td.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  td.classList.toggle('split', ruler.measureText(td.textContent).width > room);
+}
+addEventListener('resize', () => document.querySelectorAll('tr.det:not([hidden]) td.d').forEach(fit));
+
+function row(c, state) {
+  const full = sched.names[c.subj] || c.subj;
+  const st = state ? ' ' + state : '';
+  const room = c.num || c.bld
+    ? `<td class="rn">${esc(c.num)}</td><td class="rs">${c.bld ? '/' : ''}</td><td class="rb">${esc(c.bld)}</td>`
+    : '<td class="rn"></td><td class="rs"><span class="none">—</span></td><td class="rb"></td>';
+  const type = c.type ? `<td class="k ${esc(c.type)}">${esc(c.type)}</td>` : '<td class="k none">—</td>';
+  if (mode === 'short') {
+    const key = [c.day, c.start, c.week, c.subj].join('|');
+    const parts = [full !== c.subj ? `<span class="fn">${esc(full)}</span>` : '', c.teacher ? `<span class="tn">${esc(c.teacher)}</span>` : ''];
+    const det = parts.filter(Boolean).join('<span class="sep"> · </span>');
+    return `<tr class="c${st}" data-key="${esc(key)}"><td class="t">${c.start}</td>${type}` +
+      `<td class="s">${esc(c.subj)}</td>${room}<td class="w">${esc(surname(c.teacher))}</td></tr>` +
+      `<tr class="det${st}"${key === openKey ? '' : ' hidden'}><td class="t">${c.slot.end}</td><td class="d" colspan="6">${det}</td></tr>`;
+  }
+  return `<tr class="c${st}"><td class="t">${c.start}</td><td class="s" colspan="5">${esc(full)}</td></tr>` +
+    `<tr class="c2${st}"><td class="t">${c.slot.end}</td>${type}${room}<td class="w">${esc(c.teacher)}</td></tr>`;
+}
+
+function step(n) { show(addDays(shownMonday(), 7 * n)); }
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+document.getElementById('date').onchange = e => { const d = parseDate(e.target.value); if (d) show(mondayOf(d)); };
+function setMode(m) {
+  mode = m;
+  try { localStorage.setItem('mode', mode); } catch (e) {}
+  render();
+}
+document.getElementById('mode').onclick = () => setMode(mode === 'short' ? 'full' : 'short');
+document.getElementById('tbl').onclick = e => {
+  const tr = e.target.closest('tr.c');
+  if (!tr || mode !== 'short') return;
+  const det = tr.nextElementSibling;
+  const opening = det.hidden;
+  document.querySelectorAll('#tbl tr.det:not([hidden])').forEach(r => { r.hidden = true; });
+  openKey = opening ? tr.dataset.key : null;
+  if (opening) { det.hidden = false; fit(det.querySelector('td.d')); }
+};
+
+// Swipe left for the next week, right for the previous week.
+// The body has "touch-action: pan-y", so the browser leaves horizontal moves to this code.
+let t0 = null;
+addEventListener('touchstart', e => {
+  t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+addEventListener('touchcancel', () => { t0 = null; });
+addEventListener('touchend', e => {
+  if (!t0 || !sched) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+  t0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > 2 * Math.abs(dy)) step(dx < 0 ? 1 : -1);
+});
+
+// When the app comes back to the front, go to the relevant week again.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { picked = null; load(); }
+});
+setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60e3);
+
+function load() {
+  return fetch('schedule.txt', { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error('schedule.txt: HTTP ' + r.status); return r.text(); })
+    .then(text => {
+      sched = parse(text);
+      document.getElementById('err').textContent = sched.errors.join('\n');
+      render();
+    })
+    .catch(e => { document.getElementById('err').textContent = e.message; });
+}
+load();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
