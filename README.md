@@ -8,6 +8,7 @@ A vibecoded offline web app (PWA) for viewing a 2-week period timetable.
 - `index.html`: the parser and the view.
 - `sw.js`: the offline cache.
 - `manifest.webmanifest`, `icon-*.png`: the home-screen icon and name.
+- `.nojekyll`: an empty file. It tells GitHub Pages to publish the files as they are, without a Jekyll build.
 
 ## Put it on GitHub Pages
 
