@@ -1,5 +1,5 @@
 // Network first, so a pushed change shows at once. The cache is the offline fallback.
-const CACHE = 'schedule-v11';
+const CACHE = 'schedule-v12';
 const FILES = ['./', 'index.html', 'schedule.txt', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

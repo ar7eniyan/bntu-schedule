@@ -48,7 +48,10 @@ If a line has an error, the app shows the line number and the text at the top of
 
 ### The grid ("сетка")
 
-- Two weeks: the week from the date range and the week after it. Slots are rows, days are columns.
+- Four weeks: the week from the date range and the 3 weeks after it. Slots are rows, days are columns.
+- A week has no rows for the free slots before its first class and after its last class.
+- The header row of a week shows the week number at the left, for example "нед. 1", and then the days.
+- When you scroll, the header row of the week on the screen stays at the top.
 - A cell shows the subject and the room. The color of the left edge shows the type.
 - Today's column has a blue tint. Past days are pale. The current class has a blue frame. The next class has a blue name.
 - The details of a tapped class show above the bar.

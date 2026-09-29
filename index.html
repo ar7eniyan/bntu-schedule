@@ -10,8 +10,10 @@
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <style>
 :root {
-  --bg: #fff; --fg: #111; --muted: #6b6b6b; --faint: #bdbdbd; --line: #e6e6e6;
+  --bg: #fff; --fg: #111; --muted: #6b6b6b; --faint: #bdbdbd; --line: #e6e6e6; --line-hdr: #cbcbcb; --sel: #e6e6e6;
   --day-bg: #f1f1f1; --today-bg: #dde8ff; --accent: #1a5fe0;
+  /* The lines have the same APCA contrast in both themes: Lc 12 on --bg, Lc 20 for --line-hdr on --day-bg.
+     A dark theme needs a larger step in lightness for the same visible contrast. */
   /* The accent and the types stay apart for protan, deutan and tritan vision (CIEDE2000 >= 12).
      Each color has a contrast of 4.5:1 or more on the background. */
   --lek: #6b6b6b; --pr: #2a8250; --lab: #df0520; --kp: #8c3085; --err: #c00;
@@ -19,7 +21,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121212; --fg: #e9e9e9; --muted: #9c9c9c; --faint: #4f4f4f; --line: #262626;
+    --bg: #121212; --fg: #e9e9e9; --muted: #9c9c9c; --faint: #4f4f4f; --line: #4c4c4c; --line-hdr: #626262; --sel: #262626;
     --day-bg: #1d1d1d; --today-bg: #1b2b48; --accent: #6394fa;
     --lek: #9c9c9c; --pr: #85f0ad; --lab: #fd1429; --kp: #f0b0ea; --err: #ff6b6b;
   }
@@ -93,15 +95,28 @@ tr.det[hidden] { display: none; }
 td.split .sep { display: none; }
 td.split .tn { display: block; }
 
-/* The grid: slots in rows, days in columns, two weeks. */
+/* The grid: slots in rows, days in columns, four weeks. */
 table.grid { table-layout: fixed; }
 .grid col.tc { width: 2.9em; }
 .grid + .grid { margin-top: 10px; }
 .grid th { font-size: 12px; font-weight: 600; color: var(--muted); padding: 2px 3px; text-align: left; white-space: nowrap; }
-.grid tr:first-child th { background: var(--day-bg); }
+/* The header row of a week stays at the top of the screen while its table is on the screen.
+   The pale past cells have opacity, so the browser paints them in the same layer as the header.
+   The z-index puts the header above them. */
+.grid tr:first-child th { background: var(--day-bg); position: sticky; top: env(safe-area-inset-top); z-index: 1; }
 .grid tr:first-child th.today { background: var(--today-bg); color: var(--accent); }
+/* The same paleness as the past cells, but mixed into a solid color. */
+.grid tr:first-child th.past { opacity: 1; color: color-mix(in srgb, var(--muted) 45%, var(--day-bg)); }
+/* A line right of the first column. On the gray header, the line is stronger, so it shows.
+   A box shadow moves with the sticky header cell. A collapsed border does not. */
+.grid th:first-child { box-shadow: inset -1px 0 var(--line); }
+.grid tr:first-child th:first-child { box-shadow: inset -1px 0 var(--line-hdr); }
 .grid tr + tr th { vertical-align: top; padding-top: 4px; font-weight: 400; }
-.grid td { padding: 2px 1px; vertical-align: top; border-top: 1px solid var(--line); }
+.grid td { padding: 2px 1px; vertical-align: top; }
+/* The row lines go under the times too, and a line closes the week.
+   The gray header already makes an edge, so the first row has no line above it. */
+.grid tr + tr + tr > * { border-top: 1px solid var(--line); }
+.grid tr:last-child > * { border-bottom: 1px solid var(--line); }
 .grid td.today { background: color-mix(in srgb, var(--today-bg) 45%, transparent); }
 .grid .past { opacity: .45; }
 .gi { border-left: 3px solid var(--faint); border-radius: 2px; padding: 1px 3px; }
@@ -110,9 +125,15 @@ table.grid { table-layout: fixed; }
 .gi small { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .gi[data-k="лек"] { border-color: var(--lek); } .gi[data-k="пр"] { border-color: var(--pr); }
 .gi[data-k="лаб"] { border-color: var(--lab); } .gi[data-k="КП"] { border-color: var(--kp); }
-.gi.now { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* The frame of the current class. Its left side is the color bar in the accent color, so it has the shape of the bar.
+   The other sides start at the inner edge of the bar. */
+.gi.now { position: relative; border-left-color: var(--accent); }
+.gi.now::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  border: 2px solid var(--accent); border-left: 0; border-radius: 0 2px 2px 0;
+}
 .gi.next > b { color: var(--accent); }
-.gi.sel { background: var(--line); }
+.gi.sel { background: var(--sel); }
 /* The details of the class tapped in the grid. */
 #sheet { padding: 8px calc(env(safe-area-inset-right) + 12px) 8px calc(env(safe-area-inset-left) + 12px); }
 #sheet[hidden] { display: none; }
@@ -303,7 +324,7 @@ function render() {
   if (!sched || !sched.week1) return;
   const now = new Date();
   const monday = shownMonday();
-  const weeks = mode === 'grid' ? 2 : 1;
+  const weeks = mode === 'grid' ? 4 : 1;
 
   document.getElementById('wk').textContent = 'неделя ' + weekNo(monday);
   document.getElementById('range').textContent = dates(monday, addDays(monday, 7 * weeks - 1));
@@ -314,7 +335,7 @@ function render() {
   shown = new Map();
   focusDay = -1;
   const view = document.getElementById('view');
-  view.innerHTML = mode === 'grid' ? gridWeek(monday, now) + gridWeek(addDays(monday, 7), now) : listWeek(monday, now);
+  view.innerHTML = mode === 'grid' ? [0, 1, 2, 3].map(n => gridWeek(addDays(monday, 7 * n), now)).join('') : listWeek(monday, now);
   if (!shown.has(openKey)) openKey = null;
   view.querySelectorAll('tr.det:not([hidden]) td.d').forEach(fit);
   sheet();
@@ -394,8 +415,11 @@ function gridWeek(monday, now) {
   for (let d = 0; d <= lastDay(); d++) days.push(dayOf(monday, d, now));
   const cls = x => [x.today && 'today', x.past && 'past'].filter(Boolean).join(' ');
   let h = `<table class="grid"><colgroup><col class="tc">${'<col>'.repeat(days.length)}</colgroup>` +
-    `<tr><th></th>${days.map(x => `<th class="${cls(x)}">${DAYS[x.d]} ${x.date.getDate()}</th>`).join('')}</tr>`;
-  for (const slot of sched.slots) {
+    `<tr><th>нед. ${weekNo(monday)}</th>${days.map(x => `<th class="${cls(x)}">${DAYS[x.d]} ${x.date.getDate()}</th>`).join('')}</tr>`;
+  // No rows for the free slots before the first class and after the last class of the week.
+  const used = sched.slots.map(slot => days.some(x => x.list.some(e => e.c.slot === slot)));
+  const first = used.indexOf(true), last = used.lastIndexOf(true);
+  for (const slot of first < 0 ? [] : sched.slots.slice(first, last + 1)) {
     h += `<tr><th>${slot.start}</th>` +
       days.map(x => `<td class="${cls(x)}">${x.list.filter(e => e.c.slot === slot).map(cell).join('')}</td>`).join('') + '</tr>';
   }
